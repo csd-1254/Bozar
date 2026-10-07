@@ -1,0 +1,58 @@
+plugins {
+    id 'java-gradle-plugin'
+    id 'java-library'
+    id 'maven-publish'
+}
+
+group = rootProject.group
+version = rootProject.version
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+    withSourcesJar()
+}
+
+dependencies {
+    api project(':bozar-core')
+
+    testImplementation gradleTestKit()
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+gradlePlugin {
+    plugins {
+        bozar {
+            id = 'io.github.vimasig.bozar'
+            implementationClass = 'io.github.vimasig.bozar.gradle.BozarPlugin'
+            displayName = 'Bozar'
+            description = 'Bytecode obfuscation for Java plugins, with first-class Bukkit/Paper metadata support.'
+        }
+    }
+}
+
+publishing {
+    publications {
+        pluginMaven(MavenPublication) {
+            // License declared at publication level; marker POM inherits it.
+            pom {
+                licenses {
+                    license {
+                        name = 'MIT License'
+                        url = 'https://opensource.org/licenses/MIT'
+                    }
+                }
+            }
+        }
+    }
+}
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat = 'full'
+    }
+}

@@ -1,0 +1,59 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+}
+
+group = rootProject.group
+version = rootProject.version
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+    withSourcesJar()
+}
+
+// No publication auto-exists for a plain java-library project: maven-publish adds
+// the *task*, but only java-gradle-plugin generates the publication. Without this,
+// publishToMavenLocal runs with no actions and publishes nothing, while the plugin
+// POM references bozar-core and would make consumer builds fail to resolve it.
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+            // withSourcesJar() contributes the sources artifact automatically.
+
+            // The repository carries a LICENSE file but the POM did not declare it, so a
+            // downstream license scanner saw an unlicensed artifact.
+            pom {
+                name = 'bozar-core'
+                description = 'Bozar bytecode obfuscation engine.'
+                licenses {
+                    license {
+                        name = 'MIT License'
+                        url = 'https://opensource.org/licenses/MIT'
+                    }
+                }
+            }
+        }
+    }
+}
+
+dependencies {
+    // Upstream Bozar declares asm 9.9 in pom.xml; keep the exact version so transformer
+    // behavior is unchanged. asm-util is required by the CheckClassAdapter verification path.
+    api 'org.ow2.asm:asm:9.9'
+    api 'org.ow2.asm:asm-commons:9.9'
+    api 'org.ow2.asm:asm-tree:9.9'
+    api 'org.ow2.asm:asm-util:9.9'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+    }
+}

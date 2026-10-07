@@ -1,0 +1,10 @@
+rootProject.name = 'bozar'
+
+include(':bozar-core')
+include(':bozar-gradle-plugin')
+
+dependencyResolutionManagement {
+    repositories {
+        mavenCentral()
+    }
+}
