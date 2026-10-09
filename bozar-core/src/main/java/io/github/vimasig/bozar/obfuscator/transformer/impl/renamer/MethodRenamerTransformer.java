@@ -45,6 +45,15 @@ public class MethodRenamerTransformer extends RenamerTransformer {
         if ((classNode.access & ACC_ANNOTATION) != 0) return;
         if (methodNode.name.contains("<")) return;
         if (whitelistedMethods.contains(methodNode.name + methodNode.desc)) return;
+        // Enum synthetic members are resolved reflectively (Class.getEnumConstants() invokes
+        // values() and reads $VALUES; Enum.valueOf()/EnumMap use valueOf). Renaming them breaks
+        // reflection at runtime (e.g. "keyUniverse is null" when an EnumMap is constructed), so
+        // keep the JLS-mandated names on enum classes.
+        if ((classNode.access & ACC_ENUM) != 0) {
+            final String enumType = "L" + classNode.name + ";";
+            if (methodNode.name.equals("values") && methodNode.desc.equals("()[" + enumType)) return;
+            if (methodNode.name.equals("valueOf") && methodNode.desc.equals("(Ljava/lang/String;)" + enumType)) return;
+        }
 
         final String mapName = ASMUtils.getMethodMapKey(classNode, methodNode);
 

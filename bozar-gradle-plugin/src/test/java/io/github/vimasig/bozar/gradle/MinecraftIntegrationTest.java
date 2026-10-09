@@ -117,6 +117,32 @@ class MinecraftIntegrationTest {
         runFixture("REWRITE");
     }
 
+    @Test
+    void collectBozarDependenciesExportsThePluginDependency() throws Exception {
+        writeFixture("KEEP");
+
+        final BuildResult result = GradleRunner.create()
+                .withProjectDir(projectDir.toFile())
+                .withPluginClasspath()
+                .withArguments(":plugin:collectBozarDependencies", "--console=plain", "--stacktrace")
+                .build();
+
+        final org.gradle.testkit.runner.BuildTask task = result.task(":plugin:collectBozarDependencies");
+        assertNotNull(task, "the task must have run, output was:\n" + result.getOutput());
+        assertEquals(TaskOutcome.SUCCESS, task.getOutcome(),
+                "the collect task must succeed, output was:\n" + result.getOutput());
+
+        // The plugin's only dependency is the bukkit-stub subproject; its jar must be exported.
+        final Path depsDir = projectDir.resolve("plugin/build/bozar/dependencies");
+        final List<Path> exported;
+        try (var stream = Files.list(depsDir)) {
+            exported = stream.filter(p -> p.toString().endsWith(".jar")).toList();
+        }
+        assertEquals(1, exported.size(),
+                "exactly the stub jar must be exported to " + depsDir + ", found " + exported);
+        assertTrue(Files.isRegularFile(exported.get(0)), "the exported file must be a jar");
+    }
+
     /**
      * Builds the fixture, runs the real {@code obfuscate} task on it, and checks every
      * property docs/04 section 7 lists. See the class comment for what this does and does not

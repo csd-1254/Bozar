@@ -75,7 +75,15 @@ public abstract class ObfuscateTask extends DefaultTask {
 
     @Input
     @Optional
+    public abstract Property<String> getRenamerLevel();
+
+    @Input
+    @Optional
     public abstract Property<Boolean> getControlFlowEnabled();
+
+    @Input
+    @Optional
+    public abstract Property<String> getControlFlowLevel();
 
     @Input
     @Optional
@@ -83,15 +91,67 @@ public abstract class ObfuscateTask extends DefaultTask {
 
     @Input
     @Optional
+    public abstract Property<String> getConstantsLevel();
+
+    @Input
+    @Optional
+    public abstract Property<String> getStringLevel();
+
+    @Input
+    @Optional
     public abstract Property<Boolean> getRemoveSourceFile();
 
     @Input
     @Optional
-    public abstract Property<Boolean> getRemoveLineNumbers();
+    public abstract Property<String> getDebugLineNumbersLevel();
 
     @Input
     @Optional
-    public abstract Property<Boolean> getRemoveLocalVariables();
+    public abstract Property<String> getDebugLocalVariablesLevel();
+
+    @Input
+    @Optional
+    public abstract Property<Boolean> getShuffle();
+
+    @Input
+    @Optional
+    public abstract Property<Boolean> getRemoveInnerClasses();
+
+    @Input
+    @Optional
+    public abstract Property<Boolean> getCrasher();
+
+    @Input
+    @Optional
+    public abstract Property<Boolean> getWatermarkDummyClass();
+
+    @Input
+    @Optional
+    public abstract Property<Boolean> getWatermarkTextInsideClass();
+
+    @Input
+    @Optional
+    public abstract Property<Boolean> getWatermarkLdcPop();
+
+    @Input
+    @Optional
+    public abstract Property<Boolean> getWatermarkZipComment();
+
+    @Input
+    @Optional
+    public abstract Property<String> getWatermarkDummyClassText();
+
+    @Input
+    @Optional
+    public abstract Property<String> getWatermarkTextInsideClassText();
+
+    @Input
+    @Optional
+    public abstract Property<String> getWatermarkLdcPopText();
+
+    @Input
+    @Optional
+    public abstract Property<String> getWatermarkZipCommentText();
 
     @Input
     @Optional
@@ -118,6 +178,10 @@ public abstract class ObfuscateTask extends DefaultTask {
     /** User keep rules as raw patterns (no transformer prefix); see {@link KeepRules}. */
     @Input
     public abstract ListProperty<String> getKeepPatterns();
+
+    /** Patterns excluded from EVERY transformer (copied through verbatim); see {@link KeepRules#excludeAll}. */
+    @Input
+    public abstract ListProperty<String> getExcludePatterns();
 
     /** Extra classpath JARs the engine's remapper must be able to resolve. */
     @InputFiles
@@ -162,6 +226,7 @@ public abstract class ObfuscateTask extends DefaultTask {
     private String buildExclude(Path input) {
         KeepRules rules = KeepRules.create();
         getKeepPatterns().getOrElse(List.of()).forEach(rules::className);
+        getExcludePatterns().getOrElse(List.of()).forEach(rules::excludeAll);
 
         if (!getMinecraftEnabled().getOrElse(false)) {
             return render(rules);
@@ -199,52 +264,82 @@ public abstract class ObfuscateTask extends DefaultTask {
         return sb.toString();
     }
 
+    /**
+     * Level (explicit enum string) wins over the enabled flag, which wins over the profile. This
+     * lets the DSL express "off", "light", "heavy" as a single declaration while staying
+     * backward compatible with the boolean {@code enabled} toggle.
+     */
+    private static <E extends Enum<E>> E resolveEnum(Property<String> level, Property<Boolean> enabled,
+                                                     Class<E> type, E profile, E off, E on) {
+        final String raw = level.getOrNull();
+        if (raw != null && !raw.isEmpty()) {
+            return Enum.valueOf(type, raw.toUpperCase());
+        }
+        if (enabled == null) {
+            return profile;  // e.g. strings: only level/profile apply, no boolean toggle.
+        }
+        final Boolean flag = enabled.getOrNull();
+        return flag == null ? profile : (flag ? on : off);
+    }
+
     /** Profile first, then the explicit toggles win. Absent toggles inherit the profile. */
     private BozarOptions resolveOptions() {
         final BozarOptions base = Profile.valueOf(getProfileName().getOrElse(Profile.BASIC.name())).options();
 
-        final RenameOption rename = pick(getRenamerEnabled(), base.getRename(),
-                RenameOption.OFF, RenameOption.ALPHABET);
-        final ControlFlowObfuscationOption controlFlow = pick(getControlFlowEnabled(),
+        final RenameOption rename = resolveEnum(getRenamerLevel(), getRenamerEnabled(),
+                RenameOption.class, base.getRename(), RenameOption.OFF, RenameOption.ALPHABET);
+        final ControlFlowObfuscationOption controlFlow = resolveEnum(getControlFlowLevel(),
+                getControlFlowEnabled(), ControlFlowObfuscationOption.class,
                 base.getControlFlowObfuscation(), ControlFlowObfuscationOption.OFF,
                 ControlFlowObfuscationOption.LIGHT);
-        final ConstantObfuscationOption constants = pick(getConstantsEnabled(),
+        final ConstantObfuscationOption constants = resolveEnum(getConstantsLevel(),
+                getConstantsEnabled(), ConstantObfuscationOption.class,
                 base.getConstantObfuscation(), ConstantObfuscationOption.OFF,
                 ConstantObfuscationOption.LIGHT);
-        // Strings ride the same toggle as constants: they are the same class of risk.
-        final StringObfuscationOption strings = switch (constants) {
-            case OFF -> StringObfuscationOption.OFF;
-            case LIGHT -> StringObfuscationOption.LIGHT;
-            case FLOW -> StringObfuscationOption.HEAVY;
-        };
+        final StringObfuscationOption strings = resolveEnum(getStringLevel(), null,
+                StringObfuscationOption.class, base.getStringObfuscation(),
+                StringObfuscationOption.OFF, StringObfuscationOption.LIGHT);
 
         final boolean removeSourceFile = getRemoveSourceFile().getOrNull() != null
                 ? getRemoveSourceFile().get() : base.isRemoveSourceFile();
-        final boolean removeLineNumbers = getRemoveLineNumbers().getOrNull() != null
-                ? getRemoveLineNumbers().get() : (base.getLineNumbers() != LineNumberOption.KEEP);
-        final boolean removeLocalVariables = getRemoveLocalVariables().getOrNull() != null
-                ? getRemoveLocalVariables().get() : (base.getLocalVariables() != LocalVariableOption.KEEP);
+        final LineNumberOption lineNumbers = resolveEnum(getDebugLineNumbersLevel(), null,
+                LineNumberOption.class, base.getLineNumbers(), LineNumberOption.DELETE, LineNumberOption.DELETE);
+        final LocalVariableOption localVariables = resolveEnum(getDebugLocalVariablesLevel(), null,
+                LocalVariableOption.class, base.getLocalVariables(), LocalVariableOption.DELETE, LocalVariableOption.OBFUSCATE);
 
-        final WatermarkOptions watermark = base.getWatermarkOptions();
+        final WatermarkOptions watermark = resolveWatermark(base.getWatermarkOptions());
+        final boolean shuffle = getShuffle().getOrNull() != null ? getShuffle().get() : base.isShuffle();
+        final boolean removeInnerClasses = getRemoveInnerClasses().getOrNull() != null
+                ? getRemoveInnerClasses().get() : base.isRemoveInnerClasses();
+        final boolean crasher = getCrasher().getOrNull() != null ? getCrasher().get() : base.isCrasher();
 
         return new BozarOptions(
                 rename,
-                removeLineNumbers ? LineNumberOption.DELETE : LineNumberOption.KEEP,
-                removeLocalVariables ? LocalVariableOption.OBFUSCATE : LocalVariableOption.KEEP,
+                lineNumbers,
+                localVariables,
                 removeSourceFile,
-                base.isShuffle(), base.isRemoveInnerClasses(),
-                controlFlow, base.isCrasher(), constants, strings, watermark);
-    }
-
-    /** {@code true -> on, false -> off, absent -> profile value}. */
-    private static <T> T pick(Property<Boolean> flag, T profile, T off, T on) {
-        final Boolean value = flag.getOrNull();
-        return value == null ? profile : (value ? on : off);
+                shuffle, removeInnerClasses,
+                controlFlow, crasher, constants, strings, watermark);
     }
 
     private static String compact(long bytes) {
         if (bytes < 1024) return bytes + "B";
         return String.format("%.1fK", bytes / 1024.0);
+    }
+
+    /** Merges watermark overrides from the extension onto the profile defaults. */
+    private WatermarkOptions resolveWatermark(WatermarkOptions base) {
+        // Watermark options are read directly off the running task's properties (set in BozarExtension.wire).
+        final boolean dummyClass = getWatermarkDummyClass().getOrElse(base.isDummyClass());
+        final boolean textInsideClass = getWatermarkTextInsideClass().getOrElse(base.isTextInsideClass());
+        final boolean ldcPop = getWatermarkLdcPop().getOrElse(base.isLdcPop());
+        final boolean zipComment = getWatermarkZipComment().getOrElse(base.isZipComment());
+        return new WatermarkOptions(
+                dummyClass, textInsideClass, ldcPop, zipComment,
+                getWatermarkDummyClassText().getOrElse(base.getDummyClassText()),
+                getWatermarkTextInsideClassText().getOrElse(base.getTextInsideClassText()),
+                getWatermarkLdcPopText().getOrElse(base.getLdcPopText()),
+                getWatermarkZipCommentText().getOrElse(base.getZipCommentText()));
     }
 
     /** Entrypoint strategy per docs/04 section 3. {@link #KEEP} is the documented default. */

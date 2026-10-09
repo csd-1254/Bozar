@@ -83,7 +83,7 @@ class BozarPluginTest {
         BuildResult result = runner.build();
         assertEquals(TaskOutcome.SUCCESS,
                 result.task(":obfuscate").getOutcome(),
-                "obfuscate task must succeed");
+                "obfuscate task must succeed, output was:\n" + result.getOutput());
 
         // Default output path: build/libs/<project>-obfuscated.jar
         final Path output = projectDir.resolve("build/libs/bozartest-obfuscated.jar");

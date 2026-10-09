@@ -73,13 +73,13 @@ bozar {
 
 | Item | Value |
 | --- | --- |
-| Java to build the plugin | 17 |
-| Minimum Java runtime | 17 |
+| Java to build the plugin | 25 |
+| Minimum Java runtime | 25 |
 | Class-file versions tested | up to Java 26 (major 70) — measured against ASM 9.9 |
 | ASM | 9.9 (pinned to the upstream version) |
 | Gradle | 8.14.5 (the version the wrapper pins and the tests run against) |
 
-The plugin builds for Java 17 while the engine passes through whatever class-file version
+The plugin builds for Java 25 while the engine passes through whatever class-file version
 the input contains (measured up to Java 26 / major 70; major 71 is rejected by ASM): the
 build JDK and the Minecraft server JDK are different machines.
 
@@ -97,10 +97,13 @@ See [`docs/12-deviations-and-limitations.md`](docs/12-deviations-and-limitations
 full list, including which transformers honor a seed, the textual (non-YAML) metadata
 reader, and the license situation of the upstream source.
 
+See [`docs/13-dependency-collection.md`](docs/13-dependency-collection.md) for information about
+dependency handling, including how Bozar resolves library classes during obfuscation.
+
 ## Building this repository
 
 ```bash
-./gradlew clean build     # requires JAVA_HOME pointing at a JDK 17
+./gradlew clean build     # requires JAVA_HOME pointing at a JDK 25
 ```
 
 ## License

@@ -8,9 +8,11 @@ import java.util.Set;
 /**
  * Builds {@code TransformerName:pattern} exclusion lines.
  *
- * <p>Exclusion scope is the class renamer only: a class that is not renamed is not
- * touched by anything else either, because fields and methods are renamed relative to
- * their owning class by the same pass.
+ * <p>{@code className}/{@code packageName} scope is the class renamer only (they emit
+ * {@code ClassRenamerTransformer:}-prefixed lines): the class keeps its name but other
+ * transformers (constants, strings, debug, ...) still apply. To exclude a class from
+ * <em>every</em> transformer, use {@link #excludeAll(String)}, which emits an unprefixed
+ * pattern the engine copies through verbatim.
  */
 public final class KeepRules {
 
@@ -18,6 +20,8 @@ public final class KeepRules {
 
     private final Set<String> keepClasses = new LinkedHashSet<>();
     private final Set<String> keepPackages = new LinkedHashSet<>();
+    /** Unprefixed patterns: exclude a class/package from EVERY transformer, not just renaming. */
+    private final Set<String> excludeAll = new LinkedHashSet<>();
 
     private KeepRules() {
     }
@@ -64,6 +68,20 @@ public final class KeepRules {
         final List<String> lines = new ArrayList<>();
         for (String pkg : this.keepPackages) lines.add(CLASS_RENAMER + ":" + pkg);
         for (String cls : this.keepClasses) lines.add(CLASS_RENAMER + ":" + cls);
+        // Unprefixed: honored by every transformer and by the JAR load/write/verify checks,
+        // so a matching class is copied through completely unchanged.
+        lines.addAll(this.excludeAll);
         return lines;
+    }
+
+    /**
+     * Fully exclude a class or package pattern from ALL transformers (rename, constants,
+     * strings, debug, control-flow, shuffle, ...). Emitted without a transformer prefix, so
+     * the engine copies the class through verbatim. Dot-separated names; {@code *}/{@code **}
+     * wildcards supported (e.g. {@code com.example.api.**}).
+     */
+    public KeepRules excludeAll(String pattern) {
+        if (pattern != null && !pattern.isBlank()) this.excludeAll.add(pattern.trim());
+        return this;
     }
 }

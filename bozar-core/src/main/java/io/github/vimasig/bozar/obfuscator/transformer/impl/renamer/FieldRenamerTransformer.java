@@ -19,6 +19,7 @@ public class FieldRenamerTransformer extends RenamerTransformer {
         // Map all fields in this class node and its super classes (if not mapped)
         getSuperHierarchy(classNode)
                 .forEach(cn -> cn.fields.stream()
+                        .filter(fieldNode -> !isEnumSyntheticField(cn, fieldNode))
                         .filter(fieldNode -> !this.getBozar().isExcluded(this, ASMUtils.getName(cn, fieldNode)))
                         .filter(fieldNode -> !this.isMapRegistered(getFieldMapFormat(cn, fieldNode)))
                         .forEach(fieldNode -> this.registerMap(getFieldMapFormat(cn, fieldNode)))
@@ -36,6 +37,16 @@ public class FieldRenamerTransformer extends RenamerTransformer {
 
     private static String getFieldMapFormat(ClassNode classNode, FieldNode fieldNode) {
         return classNode.name + "." + fieldNode.name;
+    }
+
+    /**
+     * Enum constant fields and the synthetic {@code $VALUES} array back the reflective enum
+     * machinery ({@code Class.getEnumConstants()}, {@code Enum.valueOf}, {@code EnumMap}).
+     * Renaming them produces a JAR whose enums fail at runtime, so leave them untouched.
+     */
+    private static boolean isEnumSyntheticField(ClassNode classNode, FieldNode fieldNode) {
+        if ((classNode.access & ACC_ENUM) == 0) return false;
+        return (fieldNode.access & ACC_ENUM) != 0 || fieldNode.name.equals("$VALUES");
     }
 
     @Override

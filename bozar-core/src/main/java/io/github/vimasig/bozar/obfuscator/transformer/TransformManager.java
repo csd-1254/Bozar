@@ -12,7 +12,6 @@ import io.github.vimasig.bozar.obfuscator.transformer.impl.watermark.ZipCommentT
 import io.github.vimasig.bozar.obfuscator.utils.ASMUtils;
 import io.github.vimasig.bozar.obfuscator.utils.model.BozarConfig;
 import org.objectweb.asm.commons.ClassRemapper;
-import org.objectweb.asm.commons.SimpleRemapper;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 
@@ -98,7 +97,7 @@ public class TransformManager {
         // Remap classes
         if(this.bozar.getConfig().getOptions().getRename() != BozarConfig.BozarOptions.RenameOption.OFF) {
             this.bozar.log("Applying renamer...");
-            var reMapper = new SimpleRemapper(map);
+            var reMapper = new LambdaAwareRemapper(map);
             for (int i = 0; i < this.bozar.getClasses().size(); i++) {
                 ClassNode classNode = this.bozar.getClasses().get(i);
                 ClassNode remappedClassNode = new ClassNode();
